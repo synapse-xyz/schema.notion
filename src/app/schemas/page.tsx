@@ -1,17 +1,23 @@
 import { Button } from '@/components/ui/button'
 
 import { PATHS } from '@/constants/paths'
+import { getCurrentUser } from '@/lib/auth'
+import { logout } from '@/lib/auth'
 import { getThreadsByUserId } from '@/lib/thread'
-import { SignedIn, UserButton } from '@clerk/nextjs'
-import { currentUser } from '@clerk/nextjs/server'
-import { Database, PlusCircle } from 'lucide-react'
+import { Database, LogOut, PlusCircle } from 'lucide-react'
 import Link from 'next/link'
 import { redirect } from 'next/navigation'
-import { ThreadList } from './thread-list'
 import { ExampleButtons } from './examples'
+import { ThreadList } from './thread-list'
+
+async function handleLogout() {
+  'use server'
+  await logout()
+  redirect('/')
+}
 
 export default async function SchemasList() {
-  const user = await currentUser()
+  const user = await getCurrentUser()
 
   if (!user) {
     redirect('/sign-in')
@@ -38,9 +44,13 @@ export default async function SchemasList() {
           <span className="font-bold inline-block">schema.ai</span>
         </Link>
         <div className="flex items-center gap-4">
-          <SignedIn>
-            <UserButton />
-          </SignedIn>
+          <span className="text-sm text-muted-foreground">{user.email}</span>
+          <form action={handleLogout}>
+            <Button variant="outline" size="sm">
+              <LogOut className="h-4 w-4 mr-2" />
+              Cerrar sesión
+            </Button>
+          </form>
         </div>
       </header>
       <div className="flex justify-between items-center mb-8">

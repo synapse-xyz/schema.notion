@@ -1,54 +1,47 @@
 'use client'
 
-import type { IThread } from '@/models/Thread'
+import type { Thread } from '@/db/schema'
 
-import { useEffect, useState } from 'react'
-import { useParams } from 'next/navigation'
+import { useEffect } from 'react'
+import { useState } from 'react'
 
-import { ChevronUp } from 'lucide-react'
+import { Button } from '@/components/ui/button'
 import {
   ResizableHandle,
   ResizablePanel,
   ResizablePanelGroup,
 } from '@/components/ui/resizable'
-import { Button } from '@/components/ui/button'
+import { ChevronUp } from 'lucide-react'
 
+import { useChatStore } from '@/stores/chat'
 import Chat from '../sections/chat-panel'
 import DiagramPanel from '../sections/diagram-panel'
 import SchemaPanel from '../sections/schema-panel'
-import { useChatStore } from '@/stores/chat'
-import { useConfigStore } from '@/stores/config'
-import { useUser } from '@clerk/nextjs'
 
-export default function PageContent({ thread }: { thread: IThread | null }) {
+type PageContentProps = {
+  thread: Thread | null
+  chatId: string
+}
+
+export default function PageContent({ thread, chatId }: PageContentProps) {
   const [panels, setPanels] = useState<{ [panel: string]: boolean }>({
     chat: true,
     schema: false,
   })
 
   const { loadChatThread, chatId: storeChatId } = useChatStore()
-  const params = useParams()
-  const urlChatId = params.id as string
-
-  const { user } = useUser()
-  const userId = user?.id
-  const { setUserId } = useConfigStore()
-
-  useEffect(() => {
-    if (userId) setUserId(userId)
-  }, [userId, setUserId])
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: no need
   useEffect(() => {
-    if (urlChatId) {
+    if (chatId) {
       if (
-        urlChatId !== storeChatId ||
+        chatId !== storeChatId ||
         useChatStore.getState().chatHistory === null
       ) {
-        loadChatThread(urlChatId, thread)
+        loadChatThread(chatId, thread)
       }
     }
-  }, [urlChatId, loadChatThread, storeChatId])
+  }, [chatId, loadChatThread, storeChatId])
 
   const togglePanel = (panel: string) => {
     setPanels((prev) => ({

@@ -1,7 +1,6 @@
 'use client'
 
-import type { IThread } from '@/models/Thread'
-import { useState } from 'react'
+import { Button } from '@/components/ui/button'
 import {
   Card,
   CardContent,
@@ -10,23 +9,24 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/card'
-import Link from 'next/link'
-import { Button } from '@/components/ui/button'
+import { ConfirmationModal } from '@/components/ui/confirmation-modal'
 import { PATHS } from '@/constants/paths'
+import type { Thread } from '@/db/schema'
+import { deleteThread } from '@/lib/thread'
 import { getRelativeTime } from '@/utils/get-relative-time'
 import { Trash2 } from 'lucide-react'
-import { deleteThread } from '@/lib/thread'
-import { ConfirmationModal } from '@/components/ui/confirmation-modal'
+import Link from 'next/link'
 import { useRouter } from 'next/navigation'
+import { useState } from 'react'
 
-interface Thread extends Partial<IThread> {
+interface ThreadWithTitle extends Thread {
   dbTitle: string
 }
 
-export function ThreadList({ threads }: { threads: Thread[] }) {
+export function ThreadList({ threads }: { threads: ThreadWithTitle[] }) {
   const [showDeleteModal, setShowDeleteModal] = useState(false)
   const [currentThreadToDelete, setCurrentThreadToDelete] =
-    useState<Thread | null>(null)
+    useState<ThreadWithTitle | null>(null)
   const [isDeleting, setIsDeleting] = useState(false)
   const router = useRouter()
 
@@ -44,19 +44,17 @@ export function ThreadList({ threads }: { threads: Thread[] }) {
     )
   }
 
-  const updatedAt = (threadUpdatedAt: string) => new Date(threadUpdatedAt)
-
-  const handleDeleteClick = (e: React.MouseEvent, thread: Thread) => {
+  const handleDeleteClick = (e: React.MouseEvent, thread: ThreadWithTitle) => {
     e.preventDefault()
     setCurrentThreadToDelete(thread)
     setShowDeleteModal(true)
   }
 
   const handleConfirmDelete = async () => {
-    if (currentThreadToDelete?.chat_id) {
+    if (currentThreadToDelete?.chatId) {
       setIsDeleting(true)
       try {
-        await deleteThread(currentThreadToDelete.chat_id)
+        await deleteThread(currentThreadToDelete.chatId)
         router.refresh()
       } catch (error) {
         console.error('Failed to delete thread:', error)
@@ -72,7 +70,7 @@ export function ThreadList({ threads }: { threads: Thread[] }) {
     <>
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
         {threads.map((thread) => (
-          <div key={thread.chat_id} className="relative group">
+          <div key={thread.chatId} className="relative group">
             <Button
               variant="ghost"
               size="icon"
@@ -83,14 +81,15 @@ export function ThreadList({ threads }: { threads: Thread[] }) {
             >
               <Trash2 className="h-4 w-4 text-red-500" />
             </Button>
-            <Link href={`${PATHS.CHAT}/${thread.chat_id}`} className="block">
+            <Link href={`${PATHS.CHAT}/${thread.chatId}`} className="block">
               <Card className="h-full transition-all hover:shadow-md">
                 <CardHeader>
                   <CardTitle className="line-clamp-1">
                     {thread.dbTitle}
                   </CardTitle>
                   <CardDescription className="text-xs">
-                    Last updated: {getRelativeTime(thread?.updatedAt || '')}
+                    Last updated:{' '}
+                    {getRelativeTime(thread.updatedAt.toISOString())}
                   </CardDescription>
                 </CardHeader>
                 <CardContent>
@@ -99,8 +98,8 @@ export function ThreadList({ threads }: { threads: Thread[] }) {
                   </p>
                 </CardContent>
                 <CardFooter className="text-xs text-muted-foreground">
-                  {updatedAt(thread?.updatedAt || '').toLocaleDateString()} at{' '}
-                  {updatedAt(thread?.updatedAt || '').toLocaleTimeString()}
+                  {thread.updatedAt.toLocaleDateString()} at{' '}
+                  {thread.updatedAt.toLocaleTimeString()}
                 </CardFooter>
               </Card>
             </Link>
@@ -113,7 +112,7 @@ export function ThreadList({ threads }: { threads: Thread[] }) {
           onClose={() => setShowDeleteModal(false)}
           onConfirm={handleConfirmDelete}
           title="¿Quieres eliminar este Chat?"
-          description={`Esta acción no se puede deshacer. Esto eliminará permanentemente el chat \"${currentThreadToDelete.dbTitle}\".`}
+          description={`Esta acción no se puede deshacer. Esto eliminará permanentemente el chat "${currentThreadToDelete.dbTitle}".`}
           confirmText="Eliminar"
           isLoading={isDeleting}
         />

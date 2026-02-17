@@ -1,81 +1,143 @@
 'use server'
 
-import Thread, { type IThread } from '@/models/Thread'
-import dbConnect from './db'
+import { db } from '@/db'
+import { type Thread, threads } from '@/db/schema'
+import type { Message } from '@/types/chat'
+import { eq } from 'drizzle-orm'
+import { getCurrentUser } from './auth'
 
-export async function createThread(userId: string, data: Partial<IThread>) {
-  await dbConnect()
-  const newThread = await Thread.create({
-    chat_id: data.chat_id,
-    user_id: userId,
-    diagram: data.diagram,
-    schemas: {
-      sql: data.schemas?.sql,
-      mongo: data.schemas?.mongo,
-    },
-    conversation: data.conversation,
-  })
-  return JSON.parse(JSON.stringify(newThread))
+export interface ThreadData {
+  chatId: string
+  userId: string
+  diagram?: string
+  schemasSql?: string
+  schemasMongo?: string
+  conversation?: Message[]
 }
 
-export async function getThread(chatId: string): Promise<IThread | null> {
-  await dbConnect()
-  const foundThread = await Thread.findOne({ chat_id: chatId })
-  if (!foundThread) {
-    return null
+export async function createThread(
+  userId: string,
+  data: Partial<ThreadData>,
+): Promise<Thread> {
+  const [newThread] = await db
+    .insert(threads)
+    .values({
+      chatId: data.chatId || crypto.randomUUID(),
+      userId,
+      diagram: data.diagram || '',
+      schemasSql: data.schemasSql || '',
+      schemasMongo: data.schemasMongo || '',
+      conversation: data.conversation || [],
+    })
+    .returning()
+
+  return newThread
+}
+
+export async function getThread(chatId: string): Promise<Thread | null> {
+  const [thread] = await db
+    .select()
+    .from(threads)
+    .where(eq(threads.chatId, chatId))
+    .limit(1)
+
+  return thread || null
+}
+
+export async function updateThread(
+  chatId: string,
+  data: Partial<ThreadData>,
+): Promise<Thread | null> {
+  const updateData: Partial<Thread> = {}
+
+  if (data.diagram !== undefined) updateData.diagram = data.diagram
+  if (data.schemasSql !== undefined) updateData.schemasSql = data.schemasSql
+  if (data.schemasMongo !== undefined)
+    updateData.schemasMongo = data.schemasMongo
+  if (data.conversation !== undefined)
+    updateData.conversation = data.conversation
+
+  if (Object.keys(updateData).length === 0) {
+    return await getThread(chatId)
   }
-  return JSON.parse(JSON.stringify(foundThread))
+
+  updateData.updatedAt = new Date()
+
+  const [updatedThread] = await db
+    .update(threads)
+    .set(updateData)
+    .where(eq(threads.chatId, chatId))
+    .returning()
+
+  return updatedThread || null
 }
 
-export async function updateThread(chatId: string, data: Partial<IThread>) {
-  await dbConnect()
-  const updatedThread = await Thread.findOneAndUpdate(
-    { chat_id: chatId },
-    { $set: data },
-    { new: true },
-  )
-  if (!updatedThread) {
-    return null
-  }
-  return JSON.parse(JSON.stringify(updatedThread))
+export async function getThreadsByUserId(userId: string): Promise<Thread[]> {
+  const userThreads = await db
+    .select()
+    .from(threads)
+    .where(eq(threads.userId, userId))
+    .orderBy(threads.createdAt)
+
+  return userThreads
 }
 
-export async function getThreadsByUserId(userId: string): Promise<IThread[]> {
-  await dbConnect()
-  const threads = await Thread.find({ user_id: userId })
-  return JSON.parse(JSON.stringify(threads))
-}
+export async function deleteThread(chatId: string): Promise<boolean> {
+  const [deletedThread] = await db
+    .delete(threads)
+    .where(eq(threads.chatId, chatId))
+    .returning()
 
-export async function deleteThread(chatId: string) {
-  await dbConnect()
-  const deletedThread = await Thread.findOneAndDelete({ chat_id: chatId })
-  if (!deletedThread) {
-    return null
-  }
-  return true
+  return !!deletedThread
 }
 
 export async function duplicateThread(
   chatId: string,
   userId: string,
-): Promise<IThread | null> {
-  await dbConnect()
-  const thread = await Thread.findOne({ chat_id: chatId })
+): Promise<Thread | null> {
+  const thread = await getThread(chatId)
+
   if (!thread) {
     return null
   }
 
   const newChatId = crypto.randomUUID()
 
-  const newThread = await Thread.create({
-    chat_id: newChatId,
-    user_id: userId,
+  const newThread = await createThread(userId, {
+    chatId: newChatId,
     diagram: thread.diagram,
-    schemas: {
-      sql: thread.schemas?.sql,
-      mongo: thread.schemas?.mongo,
-    },
-    conversation: thread.conversation,
+    schemasSql: thread.schemasSql,
+    schemasMongo: thread.schemasMongo,
+    conversation: thread.conversation as Message[],
   })
-  return JSON.parse(JSON.stringify(newThread))
+
+  return newThread
+}
+
+/**
+ * Save or update a thread for the current authenticated user.
+ * Automatically resolves the user from the session.
+ * If the thread doesn't exist, creates it. Otherwise updates it.
+ */
+export async function saveThreadForCurrentUser(
+  data: Partial<ThreadData> & { chatId: string },
+): Promise<Thread> {
+  const user = await getCurrentUser()
+  if (!user) {
+    throw new Error('User not authenticated')
+  }
+
+  const existingThread = await getThread(data.chatId)
+
+  if (existingThread) {
+    // Update existing thread
+    const updated = await updateThread(data.chatId, data)
+    if (!updated) {
+      throw new Error('Failed to update thread')
+    }
+    return updated
+  }
+
+  // Create new thread
+  return createThread(user.id, data)
 }

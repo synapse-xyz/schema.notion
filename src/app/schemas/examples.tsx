@@ -1,10 +1,10 @@
 'use client'
 
-import { useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { PATHS } from '@/constants/paths'
 import { duplicateThread } from '@/lib/thread'
 import { useRouter } from 'next/navigation'
+import { useState } from 'react'
 
 export function ExampleButtons({ userId }: { userId: string }) {
   const router = useRouter()
@@ -29,10 +29,10 @@ export function ExampleButtons({ userId }: { userId: string }) {
     setLoadingChatId(chatId)
     try {
       const response = await duplicateThread(chatId, userId)
-      if (response?.chat_id) {
-        router.push(`${PATHS.CHAT}/${response.chat_id}`)
+      if (response?.chatId) {
+        router.push(`${PATHS.CHAT}/${response.chatId}`)
       } else {
-        console.error('Error duplicating thread or chat_id missing in response')
+        console.error('Error duplicating thread or chatId missing in response')
       }
     } catch (error) {
       console.error('Error in handleDuplicate:', error)

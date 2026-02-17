@@ -1,13 +1,7 @@
-import Link from 'next/link'
+import { getCurrentUser } from '@/lib/auth'
+import { ArrowRight, Code, Database, Github, Sparkles, Zap } from 'lucide-react'
 import Image from 'next/image'
-import { ArrowRight, Database, Sparkles, Code, Zap, Github } from 'lucide-react'
-import {
-  SignInButton,
-  SignUpButton,
-  SignedIn,
-  SignedOut,
-  UserButton,
-} from '@clerk/nextjs'
+import Link from 'next/link'
 
 import { Button } from '@/components/ui/button'
 import {
@@ -19,7 +13,9 @@ import {
 import { GITHUB_REPO } from '@/constants/links'
 import { PATHS } from '@/constants/paths'
 
-export default function LandingPage() {
+export default async function LandingPage() {
+  const user = await getCurrentUser()
+
   return (
     <div className="min-h-screen bg-background px-8">
       <div className="flex flex-col container mx-auto">
@@ -41,27 +37,19 @@ export default function LandingPage() {
               </nav>
             </div>
             <div className="flex items-center space-x-4">
-              <SignedOut>
-                <SignInButton>
-                  <Button variant="outline" className="border-primary/20">
+              {user ? (
+                <Link href={PATHS.SCHEMAS}>
+                  <Button className="bg-gradient-to-r from-primary to-purple-500">
+                    Ver mis Esquemas
+                  </Button>
+                </Link>
+              ) : (
+                <Link href="/sign-in">
+                  <Button className="bg-gradient-to-r from-primary to-purple-500">
                     Iniciar sesión
                   </Button>
-                </SignInButton>
-                <SignUpButton>
-                  <Button className="bg-gradient-to-r from-primary to-purple-500">
-                    Regístrate gratis
-                  </Button>
-                </SignUpButton>
-              </SignedOut>
-              <SignedIn>
-                <Link
-                  href={PATHS.SCHEMAS}
-                  className="text-sm text-muted-foreground"
-                >
-                  <p className="text-foreground">Ver mis Esquemas</p>
                 </Link>
-                <UserButton />
-              </SignedIn>
+              )}
             </div>
           </div>
         </header>

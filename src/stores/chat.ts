@@ -1,19 +1,18 @@
 'use client'
 
-import { create } from 'zustand'
-import { persist, createJSONStorage } from 'zustand/middleware'
-import type { Message, Roles } from '@/types/chat'
-import type { IThread } from '@/models/Thread'
+import defaultMessages from '@/constants/defaultMessages'
+import type { Thread } from '@/db/schema'
 import {
-  sendUserMessage,
-  normalizeChat,
   compareJsonSchemas,
   generateDatabaseScriptFromDiagram,
-  validateUserIntent, // <<< IMPORTAR validateUserIntent
-} from '@/lib/gemini' // Asegúrate que la ruta sea correcta
-import { getThread, updateThread, createThread } from '@/lib/thread'
-import { useConfigStore } from './config'
-import defaultMessages from '@/constants/defaultMessages'
+  normalizeChat,
+  sendUserMessage,
+  validateUserIntent,
+} from '@/lib/ai'
+import { getThread, saveThreadForCurrentUser } from '@/lib/thread'
+import type { Message, Roles } from '@/types/chat'
+import { create } from 'zustand'
+import { createJSONStorage, persist } from 'zustand/middleware'
 
 const ROLES: Record<string, Roles> = {
   user: 'user',
@@ -30,7 +29,7 @@ interface ChatStore {
 
   addMessageToChat: (role: Roles, text: string, diagram?: string) => void
   handleSendMessage: (messageText: string, chatId: string) => Promise<void>
-  loadChatThread: (chatId: string, thread: IThread | null) => Promise<void>
+  loadChatThread: (chatId: string, thread: Thread | null) => Promise<void>
 }
 
 export const useChatStore = create<ChatStore>()(
@@ -120,27 +119,14 @@ export const useChatStore = create<ChatStore>()(
 
           set({ chatDiagram: aiDiagramResponse })
 
-          const thread = await getThread(chatId)
-          if (thread) {
-            const updatedConversationHistory = get().chatHistory || []
-            await updateThread(chatId, {
-              diagram: aiDiagramResponse,
-              conversation: updatedConversationHistory,
-              schemas: chatSchemas,
-            })
-          } else {
-            const { userId } = useConfigStore.getState()
-            if (!userId) {
-              throw new Error('User ID is not set in the config store.')
-            }
-            const newThread = await createThread(userId, {
-              chat_id: chatId,
-              diagram: aiDiagramResponse,
-              conversation: get().chatHistory || [],
-              schemas: chatSchemas,
-            })
-            set({ chatId: newThread.chat_id })
-          }
+          // Save or update thread for the current user
+          await saveThreadForCurrentUser({
+            chatId,
+            diagram: aiDiagramResponse,
+            conversation: get().chatHistory || [],
+            schemasSql: chatSchemas.sql,
+            schemasMongo: chatSchemas.mongo,
+          })
         } catch (error) {
           console.error('Error sending message:', error)
           addMessageToChat(
@@ -152,16 +138,19 @@ export const useChatStore = create<ChatStore>()(
         }
       },
 
-      loadChatThread: async (chatId: string, thread: IThread | null) => {
+      loadChatThread: async (chatId: string, thread: Thread | null) => {
         const { addMessageToChat } = get()
         set({ isLoading: true })
         try {
           if (thread) {
             set({
-              chatId: thread.chat_id,
-              chatHistory: thread.conversation,
+              chatId: thread.chatId,
+              chatHistory: thread.conversation as Message[],
               chatDiagram: thread.diagram,
-              chatSchemas: thread.schemas || { mongo: '', sql: '' }, // Ensure chatSchemas is not undefined
+              chatSchemas: {
+                sql: thread.schemasSql || '',
+                mongo: thread.schemasMongo || '',
+              },
               isLoading: false,
             })
           } else {

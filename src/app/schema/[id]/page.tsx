@@ -1,26 +1,23 @@
-import { currentUser } from '@clerk/nextjs/server'
+import { getCurrentUser } from '@/lib/auth'
+import { getThread } from '@/lib/thread'
 import { redirect } from 'next/navigation'
 import PageContent from './page-content'
-import { getThread } from '@/lib/thread'
 
-type PageProps = {
-  params: Promise<{ id: string }>
-}
+type PageProps = { params: Promise<{ id: string }> }
 
 export default async function Schema({ params }: PageProps) {
   const { id: chatId } = await params
+  const user = await getCurrentUser()
 
-  const thread = await getThread(chatId)
-  const user = await currentUser()
-
-  if (thread) {
-    const threadUserId = thread?.user_id
-    const currentUserId = user?.id
-
-    if (threadUserId !== currentUserId) {
-      redirect('/schemas')
-    }
+  if (!user) {
+    redirect('/sign-in')
   }
 
-  return <PageContent thread={thread} />
+  const thread = await getThread(chatId)
+
+  if (thread && thread.userId !== user.id) {
+    redirect('/schemas')
+  }
+
+  return <PageContent thread={thread} chatId={chatId} />
 }
